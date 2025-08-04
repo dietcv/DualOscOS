@@ -1,0 +1,109 @@
+name: Build Plugin
+
+on:
+  push:
+    tags:
+      - 'v*' # Push events to matching v*, i.e. v1.0, v20.15.10
+  workflow_dispatch: # Allow manual triggering for testing
+
+jobs:
+  build:
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 20
+    strategy:
+      matrix:
+        os: [macos-14, macos-13, windows-latest]
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      with:
+        submodules: 'recursive'
+
+    - name: Get SuperCollider source
+      timeout-minutes: 8
+      id: git_clone
+      continue-on-error: true
+      run: git clone --depth 1 https://github.com/supercollider/supercollider.git ${{ github.workspace }}/supercollider
+
+    - name: Fallback SuperCollider download
+      if: steps.git_clone.outcome == 'failure'
+      timeout-minutes: 5
+      shell: pwsh
+      run: |
+        Write-Host "Git clone failed, downloading zip..."
+        Invoke-WebRequest -Uri "https://github.com/supercollider/supercollider/archive/refs/heads/main.zip" -OutFile "sc.zip"
+        Expand-Archive -Path "sc.zip" -DestinationPath "."
+        Move-Item "supercollider-main" "${{ github.workspace }}/supercollider"
+
+    - name: Create build environment
+      run: cmake -E make_directory ${{ github.workspace }}/build
+
+    - name: Configure CMake (Unix)
+      if: matrix.os != 'windows-latest'
+      shell: bash
+      working-directory: ${{ github.workspace }}/build
+      run: cmake .. -DCMAKE_BUILD_TYPE='Release' -DSC_PATH=${{ github.workspace }}/supercollider
+
+    - name: Configure CMake (Windows)
+      if: matrix.os == 'windows-latest'
+      shell: pwsh
+      working-directory: ${{ github.workspace }}\build
+      run: cmake .. -DCMAKE_BUILD_TYPE='Release' -DSC_PATH="${{ github.workspace }}\supercollider"
+
+    - name: Build plugin
+      working-directory: ${{ github.workspace }}/build
+      run: cmake --build . --config "Release" --target install
+
+    - name: Package plugin (macOS-14)
+      if: matrix.os == 'macos-14'
+      shell: bash
+      working-directory: ${{ github.workspace }}/build
+      run: |
+        mkdir -p DualOscOS-package
+        # Copy only the essential plugin files directly from DualOscOS folder
+        find DualOscOS/ -name "*.scx" -exec cp {} DualOscOS-package/ \; 2>/dev/null
+        find DualOscOS/ -name "*.sc" -exec cp {} DualOscOS-package/ \; 2>/dev/null
+        find DualOscOS/ -name "*.schelp" -exec cp {} DualOscOS-package/ \; 2>/dev/null
+        # Show what we're packaging
+        echo "Files being packaged:"
+        ls -la DualOscOS-package/
+        # Create clean zip with only plugin files
+        cd DualOscOS-package && zip -r ../DualOscOS-macOS-ARM.zip . && cd ..
+
+    - name: Package plugin (macOS-13)
+      if: matrix.os == 'macos-13'
+      shell: bash
+      working-directory: ${{ github.workspace }}/build
+      run: |
+        mkdir -p DualOscOS-package
+        # Copy only the essential plugin files directly from DualOscOS folder
+        find DualOscOS/ -name "*.scx" -exec cp {} DualOscOS-package/ \; 2>/dev/null
+        find DualOscOS/ -name "*.sc" -exec cp {} DualOscOS-package/ \; 2>/dev/null
+        find DualOscOS/ -name "*.schelp" -exec cp {} DualOscOS-package/ \; 2>/dev/null
+        # Show what we're packaging
+        echo "Files being packaged:"
+        ls -la DualOscOS-package/
+        # Create clean zip with only plugin files
+        cd DualOscOS-package && zip -r ../DualOscOS-macOS-Intel.zip . && cd ..
+
+    - name: Package plugin (Windows)
+      if: matrix.os == 'windows-latest'
+      shell: pwsh
+      working-directory: ${{ github.workspace }}\build
+      run: |
+        New-Item -ItemType Directory -Force -Path "DualOscOS-package"
+        # Copy only the essential plugin files directly from DualOscOS folder
+        Get-ChildItem "DualOscOS" -Recurse -Include "*.scx","*.sc","*.schelp" | Copy-Item -Destination "DualOscOS-package" -Force
+        # Show what we're packaging
+        Write-Host "Files being packaged:"
+        Get-ChildItem "DualOscOS-package"
+        # Create clean zip with only plugin files
+        Compress-Archive -Path "DualOscOS-package\*" -DestinationPath "DualOscOS-Windows.zip" -Force
+
+    # Store as artifacts - works for both manual runs and tag pushes
+    - name: Upload build artifacts
+      uses: actions/upload-artifact@v4
+      with:
+        name: DualOscOS-${{ matrix.os }}
+        path: ${{ github.workspace }}/build/DualOscOS-*.zip
