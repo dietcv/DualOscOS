@@ -1,7 +1,6 @@
 # Build the DualOscOS plugin
 add_library(DualOscOS MODULE
     DualOscOS.cpp
-    DualOscOS.hpp  
     wavetables.h
 )
 

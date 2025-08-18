@@ -1,3 +1,5 @@
+// ===== DUAL WAVETABLE OSCILLATOR =====
+
 DualOscOS : MultiOutUGen {
 	*ar { |bufnumA, phaseA, numCyclesA = 1, cyclePosA = 0,
 		  bufnumB, phaseB, numCyclesB = 1, cyclePosB = 0,
@@ -34,4 +36,26 @@ DualOscOS : MultiOutUGen {
 		inputs = theInputs;
 		^this.initOutputs(2, rate);
 	}
+}
+
+// ===== SINGLE WAVETABLE OSCILLATOR =====
+
+SingleOscOS : UGen {
+	*ar { |bufnum, phase, numCycles = 1, cyclePos = 0, oversample = 0|
+
+		if(phase.rate!='audio'){phase = K2A.ar(phase)};
+		if(cyclePos.rate!='audio'){cyclePos = K2A.ar(cyclePos)};
+		if(bufnum.isNil) {"Invalid buffer".throw};
+
+		^this.multiNew('audio', bufnum, phase, numCycles, cyclePos, oversample)
+	}
+}
+
+// ===== SUPERSAW OSCILLATOR =====
+
+SuperSawOS : UGen {
+    *ar { |freq = 440, mix, detune, oversample = 0|
+		if(freq.rate != 'audio') { freq = K2A.ar(freq) };
+        ^this.multiNew('audio', freq, mix, detune, oversample)
+    }
 }

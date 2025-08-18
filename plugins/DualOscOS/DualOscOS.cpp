@@ -3,11 +3,12 @@
 
 static InterfaceTable *ft;
 
-namespace DualOscOS {
+// ===== DUAL WAVETABLE OSCILLATOR =====
 
-DualOscOS::DualOscOS() {
-    m_oversamplingA.reset(static_cast<float>(sampleRate()));
-    m_oversamplingB.reset(static_cast<float>(sampleRate()));
+DualOscOS::DualOscOS() : m_sampleRate(static_cast<float>(sampleRate()))
+{
+    m_oversamplingA.reset(m_sampleRate);
+    m_oversamplingB.reset(m_sampleRate);
     m_dualOsc.reset();
     mCalcFunc = make_calc_function<DualOscOS, &DualOscOS::next_aa>();
     next_aa(1);
@@ -31,7 +32,8 @@ bool DualOscOS::getBufferData(Utils::BufUnit& bufUnit, float bufNum, int nSample
 }
 
 void DualOscOS::next_aa(int nSamples) {
-    // Input parameters
+
+    // Audio-rate parameters
     const float* phaseA = in(PhaseA);
     const float* phaseB = in(PhaseB);
     const float* cyclePosA = in(CyclePosA);
@@ -41,6 +43,7 @@ void DualOscOS::next_aa(int nSamples) {
     const float* pmFilterRatioA = in(PMFilterRatioA);
     const float* pmFilterRatioB = in(PMFilterRatioB);
     
+    // Control-rate parameters
     const float numCyclesA = sc_max(in0(NumCyclesA), 1.0f);
     const float numCyclesB = sc_max(in0(NumCyclesB), 1.0f);
     const float bufNumA = in0(BufNumA);
@@ -140,10 +143,173 @@ void DualOscOS::next_aa(int nSamples) {
     }
 }
 
-} // namespace DualOscOS
+// ===== SINGLE WAVETABLE OSCILLATOR =====
+
+SingleOscOS::SingleOscOS() : m_sampleRate(static_cast<float>(sampleRate()))
+{
+    m_oversampling.reset(m_sampleRate);
+    mCalcFunc = make_calc_function<SingleOscOS, &SingleOscOS::next_aa>();
+    next_aa(1);
+}
+
+SingleOscOS::~SingleOscOS() = default;
+
+bool SingleOscOS::getBufferData(Utils::BufUnit& bufUnit, float bufNum, int nSamples,
+                              const float*& bufData, int& tableSize, const char* oscName) {
+    const SndBuf* buf;
+    const auto verify_buf = bufUnit.GetTable(mWorld, mParent, bufNum, nSamples, buf, bufData, tableSize);
+    if (!verify_buf) {
+        if (!bufUnit.m_buf_failed) {
+            Print("SingleOscOS: buffer %s not found\n", oscName);
+            bufUnit.m_buf_failed = true;
+        }
+        return false;
+    }
+    bufUnit.m_buf_failed = false;
+    return true;
+}
+
+void SingleOscOS::next_aa(int nSamples) {
+    
+    // Audio-rate parameters
+    const float* phase = in(Phase);
+    const float* cyclePos = in(CyclePos);
+
+    // Control-rate parameters
+    const float numCycles = sc_max(in0(NumCycles), 1.0f);
+    const float bufNum = in0(BufNum);
+    const int oversampleIndex = sc_clip(static_cast<int>(in0(Oversample)), 0, 4);
+    
+    // Output buffers
+    float* outbuf = out(Out);
+    
+    // Get buffer data
+    const float* bufData;
+    int tableSize;
+    
+    if (!getBufferData(m_bufUnit, bufNum, nSamples, bufData, tableSize, "SingleOscOS")) {
+        ClearUnitOutputs(this, nSamples);
+        return;
+    }
+    
+    // Pre-calculate constants
+    const int cycleSamples = tableSize / static_cast<int>(numCycles);
+    const int numCyclesInt = static_cast<int>(numCycles);
+    
+    // Set oversampling factor for both channels
+    m_oversampling.setOversamplingIndex(oversampleIndex);
+    
+    if (oversampleIndex == 0) {
+        // No oversampling - direct processing
+        for (int i = 0; i < nSamples; ++i) {
+            const float slope = m_rampToSlope.process(phase[i]);
+            
+            outbuf[i] = Utils::wavetableInterpolate(
+            phase[i], bufData, tableSize, 
+            cycleSamples, numCyclesInt, cyclePos[i], 
+            slope, m_sincTable);
+        }
+    } else {
+        // Oversampling enabled
+        const int osRatio = m_oversampling.getOversamplingRatio();
+        const float invOsRatio = 1.0f / static_cast<float>(osRatio);
+        
+        for (int i = 0; i < nSamples; ++i) {
+            const float slope = m_rampToSlope.process(phase[i]);
+            
+            // Calculate phase difference per oversampled sample
+            const float phaseDiff = slope * invOsRatio;
+            
+            // Prepare oversampling buffers
+            m_oversampling.upsample(0.0f);
+            float* osBuffer = m_oversampling.getOSBuffer();
+            
+            float osPhase = phase[i];
+            
+            for (int k = 0; k < osRatio; k++) {
+                // Increment phases first
+                osPhase += phaseDiff;
+                
+                // Then process with wrapped phases
+                osBuffer[k] = Utils::wavetableInterpolate(
+                sc_wrap(osPhase, 0.0f, 1.0f), bufData, tableSize, 
+                cycleSamples, numCyclesInt, cyclePos[i], 
+                slope, m_sincTable);
+            }
+            
+            outbuf[i] = m_oversampling.downsample();
+        }
+    }
+}
+
+// ===== SUPERSAW OSCILLATOR =====
+
+SuperSawOS::SuperSawOS() : m_sampleRate(static_cast<float>(sampleRate()))
+{
+    m_oversampling.reset(m_sampleRate);
+    m_superSaw.reset();
+    mCalcFunc = make_calc_function<SuperSawOS, &SuperSawOS::next_aa>();
+    next_aa(1);
+}
+
+SuperSawOS::~SuperSawOS() = default;
+
+void SuperSawOS::next_aa(int nSamples) {
+
+    // Audio-rate parameters
+    const float* freqIn = in(Freq);
+
+    // Control-rate parameters
+    const float mix = sc_clip(in0(Mix), 0.0f, 1.0f);       
+    const float detune = sc_clip(in0(Detune), 0.0f, 1.0f); 
+    const int oversampleIndex = sc_clip(static_cast<int>(in0(Oversample)), 0, 4);
+    
+    // Output buffer
+    float* outbuf = out(Out);
+    
+    // Set oversampling factor
+    m_oversampling.setOversamplingIndex(oversampleIndex);
+    
+    if (oversampleIndex == 0) {
+        // No oversampling - direct processing
+        for (int i = 0; i < nSamples; ++i) {
+            float slope = freqIn[i] / m_sampleRate;
+            
+            // Process SuperSaw
+            float supersawOut = m_superSaw.process(slope, mix, detune);
+            
+            // Apply pitch-tracking highpass filter
+            outbuf[i] = m_pitchTrackingHPF.processHighpass(supersawOut, slope);
+        }
+    } else {
+        // Oversampling enabled
+        const int osRatio = m_oversampling.getOversamplingRatio();
+        const float osRate = m_sampleRate * osRatio;
+        
+        for (int i = 0; i < nSamples; ++i) {
+            // Prepare oversampling buffer
+            m_oversampling.upsample(0.0f);
+            float* osBuffer = m_oversampling.getOSBuffer();
+            
+            for (int k = 0; k < osRatio; k++) {
+                float osSlope = freqIn[i] / osRate;
+                
+                // Process SuperSaw at oversampled rate
+                float supersawOut = m_superSaw.process(osSlope, mix, detune);
+                
+                // Apply pitch-tracking highpass filter
+                osBuffer[k] = m_pitchTrackingHPF.processHighpass(supersawOut, osSlope);
+            }
+            
+            outbuf[i] = m_oversampling.downsample();
+        }
+    }
+}
 
 PluginLoad(DualOscOSUGens)
 {
     ft = inTable;
-    registerUnit<DualOscOS::DualOscOS>(ft, "DualOscOS", false);
+    registerUnit<DualOscOS>(ft, "DualOscOS", false);
+    registerUnit<SingleOscOS>(ft, "SingleOscOS", false);
+    registerUnit<SuperSawOS>(ft, "SuperSawOS", false);
 }

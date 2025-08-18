@@ -60,46 +60,63 @@ jobs:
       shell: bash
       working-directory: ${{ github.workspace }}/build
       run: |
-        mkdir -p DualOscOS-package
-        # Copy only the essential plugin files directly from DualOscOS folder
-        find DualOscOS/ -name "*.scx" -exec cp {} DualOscOS-package/ \; 2>/dev/null
-        find DualOscOS/ -name "*.sc" -exec cp {} DualOscOS-package/ \; 2>/dev/null
-        find DualOscOS/ -name "*.schelp" -exec cp {} DualOscOS-package/ \; 2>/dev/null
-        # Show what we're packaging
-        echo "Files being packaged:"
-        ls -la DualOscOS-package/
-        # Create clean zip with only plugin files
-        cd DualOscOS-package && zip -r ../DualOscOS-macOS-ARM.zip . && cd ..
+        # Create SuperCollider plugin structure
+        mkdir -p DualOscOS-package/DualOscOS/Classes
+        mkdir -p DualOscOS-package/DualOscOS/HelpSource
+        
+        # Copy files to locations
+        find DualOscOS/ -name "*.scx" -exec cp {} DualOscOS-package/DualOscOS/ \; 2>/dev/null
+        find DualOscOS/ -name "*.sc" -exec cp {} DualOscOS-package/DualOscOS/Classes/ \; 2>/dev/null
+        find DualOscOS/ -name "*.schelp" -exec cp {} DualOscOS-package/DualOscOS/HelpSource/ \; 2>/dev/null
+        
+        # Show the structure
+        echo "Plugin structure:"
+        find DualOscOS-package/ -type f
+        
+        # Create zip from the plugin folder
+        cd DualOscOS-package && zip -r ../DualOscOS-macOS-ARM.zip DualOscOS && cd ..
 
     - name: Package plugin (macOS-13)
       if: matrix.os == 'macos-13'
       shell: bash
       working-directory: ${{ github.workspace }}/build
       run: |
-        mkdir -p DualOscOS-package
-        # Copy only the essential plugin files directly from DualOscOS folder
-        find DualOscOS/ -name "*.scx" -exec cp {} DualOscOS-package/ \; 2>/dev/null
-        find DualOscOS/ -name "*.sc" -exec cp {} DualOscOS-package/ \; 2>/dev/null
-        find DualOscOS/ -name "*.schelp" -exec cp {} DualOscOS-package/ \; 2>/dev/null
-        # Show what we're packaging
-        echo "Files being packaged:"
-        ls -la DualOscOS-package/
-        # Create clean zip with only plugin files
-        cd DualOscOS-package && zip -r ../DualOscOS-macOS-Intel.zip . && cd ..
+        # Create SuperCollider plugin structure
+        mkdir -p DualOscOS-package/DualOscOS/Classes
+        mkdir -p DualOscOS-package/DualOscOS/HelpSource
+        
+        # Copy files to locations
+        find DualOscOS/ -name "*.scx" -exec cp {} DualOscOS-package/DualOscOS/ \; 2>/dev/null
+        find DualOscOS/ -name "*.sc" -exec cp {} DualOscOS-package/DualOscOS/Classes/ \; 2>/dev/null
+        find DualOscOS/ -name "*.schelp" -exec cp {} DualOscOS-package/DualOscOS/HelpSource/ \; 2>/dev/null
+        
+        # Show the structure
+        echo "Plugin structure:"
+        find DualOscOS-package/ -type f
+        
+        # Create zip from the plugin folder
+        cd DualOscOS-package && zip -r ../DualOscOS-macOS-Intel.zip DualOscOS && cd ..
 
     - name: Package plugin (Windows)
       if: matrix.os == 'windows-latest'
       shell: pwsh
       working-directory: ${{ github.workspace }}\build
       run: |
-        New-Item -ItemType Directory -Force -Path "DualOscOS-package"
-        # Copy only the essential plugin files directly from DualOscOS folder
-        Get-ChildItem "DualOscOS" -Recurse -Include "*.scx","*.sc","*.schelp" | Copy-Item -Destination "DualOscOS-package" -Force
-        # Show what we're packaging
-        Write-Host "Files being packaged:"
-        Get-ChildItem "DualOscOS-package"
-        # Create clean zip with only plugin files
-        Compress-Archive -Path "DualOscOS-package\*" -DestinationPath "DualOscOS-Windows.zip" -Force
+        # Create SuperCollider plugin structure
+        New-Item -ItemType Directory -Force -Path "DualOscOS-package\DualOscOS\Classes"
+        New-Item -ItemType Directory -Force -Path "DualOscOS-package\DualOscOS\HelpSource"
+        
+        # Copy files to locations
+        Get-ChildItem "DualOscOS" -Recurse -Include "*.scx" | Copy-Item -Destination "DualOscOS-package\DualOscOS" -Force
+        Get-ChildItem "DualOscOS" -Recurse -Include "*.sc" | Copy-Item -Destination "DualOscOS-package\DualOscOS\Classes" -Force
+        Get-ChildItem "DualOscOS" -Recurse -Include "*.schelp" | Copy-Item -Destination "DualOscOS-package\DualOscOS\HelpSource" -Force
+        
+        # Show the structure
+        Write-Host "Plugin structure:"
+        Get-ChildItem "DualOscOS-package" -Recurse
+        
+        # Create zip from the plugin folder
+        Compress-Archive -Path "DualOscOS-package\DualOscOS" -DestinationPath "DualOscOS-Windows.zip" -Force
 
     # Store as artifacts - works for both manual runs and tag pushes
     - name: Upload build artifacts

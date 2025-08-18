@@ -2,6 +2,8 @@
 #pragma once
 #include "SC_PlugIn.hpp"
 #include "wavetables.h"
+#include <array>
+#include <cmath>
 
 namespace Utils {
 
@@ -137,16 +139,25 @@ struct BufUnit {
 
 struct RampToSlope {
     float m_lastPhase{0.0f};
-    
-    void reset(float currentPhase) {
-        m_lastPhase = currentPhase;
-    }
-    
+   
     float process(float currentPhase) {
+        // Calculate ramp slope
         float delta = currentPhase - m_lastPhase;
+
+        // Wrap delta to recenter between -0.5 and 0.5, for corrected slope during wrap
+        if (delta > 0.5f)
+            delta -= 1.0f;
+        else if (delta < -0.5f)
+            delta += 1.0f;    
+    
+        // Update state for next sample
         m_lastPhase = currentPhase;
-        return delta - fastFloor(delta + 0.5f);
-        //return sc_wrap(delta, -0.5f, 0.5f);
+
+        return delta;
+    }
+   
+    void reset() {
+        m_lastPhase = 0.0f;
     }
 };
 
@@ -402,6 +413,104 @@ struct DualOscillatorState {
         m_prevOscB = oscB;
         
         return {oscA, oscB};
+    }
+};
+
+// ===== SUPERSAW OSCILLATOR =====
+
+struct SuperSawOscillator {
+    // Individual oscillator states for the 7 sawtooth waves
+    struct SawState {
+        float m_phase{0.0f};
+        
+        float next(float phaseInc) {
+            // Update internal phase (standard 0-1 range)
+            m_phase += phaseInc;
+            
+            // Wrap phase to [0, 1] range
+            if (m_phase >= 1.0f)
+                m_phase -= 1.0f;
+            else if (m_phase < 0.0f)
+                m_phase += 1.0f;
+            
+            // Generate sawtooth output: ramp from -1 to +1
+            return (m_phase * 2.0f) - 1.0f;
+        }
+
+        void reset(bool isCenter = false) {
+            if (isCenter) {
+                m_phase = 0.0f;  // Center oscillator always starts at phase 0
+            } else {
+                // Side oscillators get random phase
+                m_phase = (static_cast<float>(rand()) / RAND_MAX) * 2.0f - 1.0f;
+            }
+        }
+    };
+    
+    // 7 individual sawtooth oscillators (1 center + 6 sides)
+    SawState m_centerOsc;
+    std::array<SawState, 6> m_sideOscs;
+    
+    // JP-8000 polynomial curves for detune and gain compensation
+    float detuneCurve(float x) const {
+        return (10028.7312891634f * static_cast<float>(std::pow(x, 11))) -
+            (50818.8652045924f * static_cast<float>(std::pow(x, 10))) +
+            (111363.4808729368f * static_cast<float>(std::pow(x, 9))) -
+            (138150.6761080548f * static_cast<float>(std::pow(x, 8))) +
+            (106649.6679158292f * static_cast<float>(std::pow(x, 7))) -
+            (53046.9642751875f * static_cast<float>(std::pow(x, 6))) +
+            (17019.9518580080f * static_cast<float>(std::pow(x, 5))) -
+            (3425.0836591318f * static_cast<float>(std::pow(x, 4))) +
+            (404.2703938388f * static_cast<float>(std::pow(x, 3))) -
+            (24.1878824391f * static_cast<float>(std::pow(x, 2))) +
+            (0.6717417634f * x) +
+            0.0030115596f;
+    }
+    
+    float centerGain(float x) const {
+        return (-0.55366f * x) + 0.99785f;
+    }
+    
+    float sideGain(float x) const {
+        return (-0.73764f * x * x) + (1.2841f * x) + 0.044372f;
+    }
+    
+    void reset() {
+        m_centerOsc.reset(true);   // Center: fixed phase at 0
+        for (auto& osc : m_sideOscs) {
+            osc.reset(false);      // Sides: random phase offsets
+        }
+    }
+    
+    float process(float slope, float mix, float detune) {
+
+        // Calculate detune ratios using JP-8000 curve
+        const float detuneAmount = detuneCurve(detune);
+        const std::array<float, 6> detuneRatios = {
+            -0.11002313f, 
+            -0.06288439f,
+            -0.01952356f,
+            0.01991221f,  
+            0.06216538f,
+            0.10745242f
+        };
+        
+        // Generate center oscillator
+        float centerOut = m_centerOsc.next(slope);
+        
+        // Generate side oscillators with detune
+        float sideOut = 0.0f;
+        for (int i = 0; i < 6; ++i) {
+            float detuneSlope = slope * (1.0f + (detuneAmount * detuneRatios[i]));
+            sideOut += m_sideOscs[i].next(detuneSlope);
+        }
+        
+        // Apply JP-8000 gain compensation curves
+        float centerGained = centerOut * centerGain(mix);
+        float sideGained = sideOut * sideGain(mix);
+        
+        // Sum all oscillators
+        return centerGained + sideGained;
     }
 };
 

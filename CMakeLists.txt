@@ -2,6 +2,7 @@ cmake_minimum_required(VERSION 3.10)
 
 set(lib_name "DualOscOS")
 project("${lib_name}")
+
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
@@ -21,7 +22,6 @@ else()
     message(FATAL_ERROR "Cannot find SC_PlugIn.hpp at ${SC_PATH}/include/plugin_interface/")
 endif()
 
-# Add ChowDSP as SYSTEM include (suppresses warnings)
 include_directories(SYSTEM external/chowdsp)
 include_directories(${SC_PATH}/include/plugin_interface)
 include_directories(${SC_PATH}/include/common)
@@ -31,15 +31,21 @@ set(CMAKE_SHARED_MODULE_SUFFIX ".scx")
 
 add_subdirectory(plugins/DualOscOS)
 
-# Install .sc and .schelp files directly to the main directory
-install(FILES plugins/DualOscOS/DualOscOS.sc DESTINATION ${CMAKE_INSTALL_PREFIX})
-install(FILES plugins/DualOscOS/DualOscOS.schelp DESTINATION ${CMAKE_INSTALL_PREFIX})
+# Create SuperCollider plugin structure during install
+# Install .sc files to Classes subdirectory
+install(FILES plugins/DualOscOS/DualOscOS.sc 
+        DESTINATION ${CMAKE_INSTALL_PREFIX}/Classes)
 
-# Install .scx file with platform-specific paths
+# Install .schelp files to HelpSource subdirectory  
+install(FILES plugins/DualOscOS/DualOscOS.schelp 
+        DESTINATION ${CMAKE_INSTALL_PREFIX}/HelpSource)
+
+# Install .scx file to root plugin directory with platform-specific paths
 if(APPLE OR UNIX)
-  install(FILES ${CMAKE_BINARY_DIR}/plugins/DualOscOS/DualOscOS.scx DESTINATION ${CMAKE_INSTALL_PREFIX})
+  install(FILES ${CMAKE_BINARY_DIR}/plugins/DualOscOS/DualOscOS.scx 
+          DESTINATION ${CMAKE_INSTALL_PREFIX})
 endif()
-
 if(WIN32)
-  install(FILES ${CMAKE_BINARY_DIR}/plugins/DualOscOS/Release/DualOscOS.scx DESTINATION ${CMAKE_INSTALL_PREFIX})
+  install(FILES ${CMAKE_BINARY_DIR}/plugins/DualOscOS/Release/DualOscOS.scx 
+          DESTINATION ${CMAKE_INSTALL_PREFIX})
 endif()
