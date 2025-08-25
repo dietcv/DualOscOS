@@ -9,6 +9,10 @@ namespace Utils {
 
 // ===== BASIC MATH UTILITIES =====
 
+inline float randomFloat(RGen& rgen) {
+    return rgen.frand();
+}
+
 inline float lerp(float a, float b, float t) {
     return a + t * (b - a);
 }
@@ -437,12 +441,12 @@ struct SuperSawOscillator {
             return (m_phase * 2.0f) - 1.0f;
         }
 
-        void reset(bool isCenter = false) {
+        void reset(bool isCenter, RGen& rgen) {
             if (isCenter) {
                 m_phase = 0.0f;  // Center oscillator always starts at phase 0
             } else {
                 // Side oscillators get random phase
-                m_phase = (static_cast<float>(rand()) / RAND_MAX) * 2.0f - 1.0f;
+                m_phase = randomFloat(rgen) * 2.0f - 1.0f;
             }
         }
     };
@@ -475,10 +479,10 @@ struct SuperSawOscillator {
         return (-0.73764f * x * x) + (1.2841f * x) + 0.044372f;
     }
     
-    void reset() {
-        m_centerOsc.reset(true);   // Center: fixed phase at 0
+    void reset(RGen& rgen) {
+        m_centerOsc.reset(true, rgen);   // Center: fixed phase at 0
         for (auto& osc : m_sideOscs) {
-            osc.reset(false);      // Sides: random phase offsets
+            osc.reset(false, rgen);      // Sides: random phase offsets
         }
     }
     

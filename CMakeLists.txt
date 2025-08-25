@@ -37,8 +37,12 @@ install(FILES plugins/DualOscOS/DualOscOS.sc
         DESTINATION ${CMAKE_INSTALL_PREFIX}/Classes)
 
 # Install .schelp files to HelpSource subdirectory  
-install(FILES plugins/DualOscOS/DualOscOS.schelp 
-        DESTINATION ${CMAKE_INSTALL_PREFIX}/HelpSource)
+install(FILES 
+        plugins/DualOscOS/HelpSource/DualOscOS.schelp
+        plugins/DualOscOS/HelpSource/SingleOscOS.schelp
+        plugins/DualOscOS/HelpSource/SuperSawOS.schelp
+        DESTINATION ${CMAKE_INSTALL_PREFIX}/HelpSource
+)
 
 # Install .scx file to root plugin directory with platform-specific paths
 if(APPLE OR UNIX)

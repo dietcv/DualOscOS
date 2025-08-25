@@ -246,8 +246,9 @@ void SingleOscOS::next_aa(int nSamples) {
 
 SuperSawOS::SuperSawOS() : m_sampleRate(static_cast<float>(sampleRate()))
 {
+    RGen& rgen = *mParent->mRGen;
     m_oversampling.reset(m_sampleRate);
-    m_superSaw.reset();
+    m_superSaw.reset(rgen);
     mCalcFunc = make_calc_function<SuperSawOS, &SuperSawOS::next_aa>();
     next_aa(1);
 }

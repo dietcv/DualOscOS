@@ -1,0 +1,112 @@
+class:: DualOscOS
+summary:: Dual wavetable oscillator with cross-modulation and oversampling
+related:: Classes/SingleOscOS, Classes/SuperSawOS
+categories:: UGens>Generators>Deterministic
+
+DESCRIPTION::
+DualOscOS is a high-quality dual wavetable oscillator with dynamic mipmapping, sinc interpolation, and optional oversampling. It features cross-phase modulation between the two oscillators and supports multi-cycle wavetables.
+
+CLASSMETHODS::
+
+METHOD:: ar
+
+ARGUMENT:: bufnumA
+Buffer number for oscillator A. Must contain wavetable data.
+
+ARGUMENT:: phaseA  
+Phase input for oscillator A (0.0 to 1.0, audio rate).
+
+ARGUMENT:: numCyclesA
+Number of cycles in buffer A (default: 1).
+
+ARGUMENT:: cyclePosA
+Cycle position for oscillator A (0.0 to 1.0, audio rate).
+
+ARGUMENT:: bufnumB
+Buffer number for oscillator B. Must contain wavetable data.
+
+ARGUMENT:: phaseB
+Phase input for oscillator B (0.0 to 1.0, audio rate).
+
+ARGUMENT:: numCyclesB
+Number of cycles in buffer B (default: 1).
+
+ARGUMENT:: cyclePosB
+Cycle position for oscillator B (0.0 to 1.0, audio rate).
+
+ARGUMENT:: pmIndexA
+Phase modulation depth - how much oscillator B modulates oscillator A (default: 0).
+
+ARGUMENT:: pmIndexB
+Phase modulation depth - how much oscillator A modulates oscillator B (default: 0).
+
+ARGUMENT:: pmFilterRatioA
+Filter ratio for oscillator A's phase modulation (default: 1).
+
+ARGUMENT:: pmFilterRatioB
+Filter ratio for oscillator B's phase modulation (default: 1).
+
+ARGUMENT:: oversample
+Oversampling factor: 0=1x, 1=2x, 2=4x, 3=8x, 4=16x (default: 0).
+
+returns:: A multichannel UGen with two outputs [oscA, oscB].
+
+EXAMPLES::
+
+code::
+// Basic dual oscillator
+(
+var bufA, bufB;
+bufA = Buffer.loadCollection(s, Wavetable.sineFill(512, [1]));
+bufB = Buffer.loadCollection(s, Wavetable.sineFill(512, [1, 0.5, 0.25]));
+
+{
+    var freq = 220;
+    var phaseA = Phasor.ar(0, freq / SampleRate.ir);
+    var phaseB = Phasor.ar(0, freq * 1.5 / SampleRate.ir);
+    var dual = DualOscOS.ar(bufA, phaseA, 1, 0, bufB, phaseB, 1, 0);
+    dual * 0.3;
+}.play;
+)
+
+// Cross-modulation example
+(
+var buf = Buffer.loadCollection(s, Wavetable.sineFill(512, [1, 0.3, 0.1]));
+
+{
+    var freq = 110;
+    var phaseA = Phasor.ar(0, freq / SampleRate.ir);
+    var phaseB = Phasor.ar(0, freq * 1.001 / SampleRate.ir);
+    var pmDepth = SinOsc.kr(0.1).range(0, 2);
+    
+    var dual = DualOscOS.ar(
+        buf, phaseA, 1, 0,
+        buf, phaseB, 1, 0,
+        pmDepth, pmDepth * 0.5  // Cross-modulation
+    );
+    dual.sum * 0.2;
+}.play;
+)
+
+// Multi-cycle wavetable with morphing
+(
+// Create 2-cycle wavetable: sine + harmonics
+var wt1 = Wavetable.sineFill(1024, [1]);
+var wt2 = Wavetable.sineFill(1024, [1, 0.5, 0.25, 0.125]);
+var buf = Buffer.loadCollection(s, wt1 ++ wt2);
+
+{
+    var freq = 150;
+    var phaseA = Phasor.ar(0, freq / SampleRate.ir);
+    var phaseB = Phasor.ar(0, freq * 0.99 / SampleRate.ir);
+    var morph = SinOsc.kr(0.3).range(0, 1);
+    
+    var dual = DualOscOS.ar(
+        buf, phaseA, 2, morph,    // Morphing between cycles
+        buf, phaseB, 2, morph,
+        0, 0, 1, 1, 1             // Light oversampling
+    );
+    dual.sum * 0.15;
+}.play;
+)
+::

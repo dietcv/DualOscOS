@@ -1,0 +1,99 @@
+class:: SuperSawOS
+summary:: Roland JP-8000 style SuperSaw oscillator with oversampling
+related:: Classes/DualOscOS, Classes/SingleOscOS
+categories:: UGens>Generators>Deterministic
+
+DESCRIPTION::
+SuperSawOS emulates the famous Roland JP-8000 SuperSaw oscillator, featuring 7 detuned sawtooth waves with authentic polynomial curves for detune and gain compensation. Includes pitch-tracking high-pass filtering and optional oversampling for alias-free output.
+
+The oscillator consists of one center sawtooth wave and six side oscillators with carefully calculated detune ratios and gain curves that match the original JP-8000 hardware.
+
+CLASSMETHODS::
+
+METHOD:: ar
+
+ARGUMENT:: freq
+Fundamental frequency in Hz (audio rate, default: 440).
+
+ARGUMENT:: mix
+SuperSaw mix amount (0.0 to 1.0): 0 = center oscillator only, 1 = full spread with side oscillators.
+
+ARGUMENT:: detune
+Detune amount (0.0 to 1.0): controls the spread of the 6 side oscillators using authentic JP-8000 polynomial curves.
+
+ARGUMENT:: oversample
+Oversampling factor: 0=1x, 1=2x, 2=4x, 3=8x, 4=16x (default: 0).
+
+returns:: Audio rate UGen.
+
+EXAMPLES::
+
+code::
+// Basic SuperSaw
+{
+    SuperSawOS.ar(110, 0.8, 0.5) * 0.1;
+}.play;
+
+// Animated SuperSaw parameters
+{
+    var freq = 55;
+    var mix = SinOsc.kr(0.3).range(0, 1);
+    var detune = SinOsc.kr(0.7).range(0, 1);
+    
+    SuperSawOS.ar(freq, mix, detune, 1) * 0.08; // 2x oversample
+}.play;
+
+// Compare mix levels
+{
+    var freq = 110;
+    var detune = 0.6;
+    
+    [
+        SuperSawOS.ar(freq, 0, detune),    // Center only
+        SuperSawOS.ar(freq, 0.5, detune),  // Half mix
+        SuperSawOS.ar(freq, 1, detune)     // Full mix
+    ] * 0.1;
+}.play;
+
+// SuperSaw chord
+{
+    var freqs = [55, 55*5/4, 55*3/2, 55*2]; // Major chord
+    var saws = freqs.collect { |freq|
+        SuperSawOS.ar(freq, 0.7, 0.6, 2) * 0.25; // 4x oversample
+    };
+    saws.sum * 0.1;
+}.play;
+
+// High frequency with oversampling comparison
+{
+    var freq = MouseX.kr(55, 4000, 1);
+    var mix = 0.8;
+    var detune = 0.7;
+    
+    [
+        SuperSawOS.ar(freq, mix, detune, 0),  // No oversampling
+        SuperSawOS.ar(freq, mix, detune, 3)   // 8x oversampling
+    ] * 0.08;
+}.play;
+
+// Classic trance lead
+{
+    var freq = 220;
+    var mix = 0.9;
+    var detune = SinOsc.kr(0.1).range(0.3, 0.8);
+    var cutoff = SinOsc.kr(0.2).range(500, 3000);
+    
+    var saw = SuperSawOS.ar(freq, mix, detune, 2);
+    var filtered = RLPF.ar(saw, cutoff, 0.3);
+    filtered * 0.1;
+}.play;
+
+// Detuning sweep demonstration
+{
+    var freq = 110;
+    var mix = 0.8;
+    var detune = Line.kr(0, 1, 10);  // Sweep detune over 10 seconds
+    
+    SuperSawOS.ar(freq, mix, detune, 1) * 0.1;
+}.play;
+::

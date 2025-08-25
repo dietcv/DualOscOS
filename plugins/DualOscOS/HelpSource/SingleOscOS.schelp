@@ -1,0 +1,95 @@
+class:: SingleOscOS
+summary:: High-quality single wavetable oscillator with oversampling
+related:: Classes/DualOscOS, Classes/SuperSawOS
+categories:: UGens>Generators>Deterministic
+
+DESCRIPTION::
+SingleOscOS is a high-quality wavetable oscillator with dynamic mipmapping, sinc interpolation, and optional oversampling. It supports multi-cycle wavetables with smooth morphing between cycles.
+
+CLASSMETHODS::
+
+METHOD:: ar
+
+ARGUMENT:: bufnum
+Buffer number containing wavetable data.
+
+ARGUMENT:: phase
+Phase input (0.0 to 1.0, audio rate).
+
+ARGUMENT:: numCycles
+Number of cycles in the wavetable (default: 1).
+
+ARGUMENT:: cyclePos
+Position within multi-cycle wavetable (0.0 to 1.0, audio rate, default: 0).
+
+ARGUMENT:: oversample
+Oversampling factor: 0=1x, 1=2x, 2=4x, 3=8x, 4=16x (default: 0).
+
+returns:: Audio rate UGen.
+
+EXAMPLES::
+
+code::
+// Basic wavetable oscillator
+(
+var buf = Buffer.loadCollection(s, Wavetable.sineFill(512, [1, 0.5, 0.25, 0.125]));
+
+{
+    var freq = 220;
+    var phase = Phasor.ar(0, freq / SampleRate.ir);
+    SingleOscOS.ar(buf, phase) * 0.3;
+}.play;
+)
+
+// Multi-cycle wavetable morphing
+(
+// Create 4-cycle wavetable: sine -> saw -> square -> triangle
+var wt1 = Wavetable.sineFill(512, [1]);                    // Sine
+var wt2 = Wavetable.sineFill(512, (1..16)/16);             // Saw  
+var wt3 = Wavetable.sineFill(512, [0,1]);                  // Square
+var wt4 = Wavetable.sineFill(512, [1,0,-1/9,0,1/25]);      // Triangle-ish
+
+var buf = Buffer.loadCollection(s, wt1 ++ wt2 ++ wt3 ++ wt4);
+
+{
+    var freq = 110;
+    var phase = Phasor.ar(0, freq / SampleRate.ir);
+    var morph = SinOsc.kr(0.2).range(0, 1);
+    
+    SingleOscOS.ar(buf, phase, 4, morph, 1) * 0.2; // 4 cycles, 2x oversample
+}.play;
+)
+
+// High-frequency with oversampling
+(
+var buf = Buffer.loadCollection(s, Wavetable.sineFill(512, (1..8)/(1..8)));
+
+{
+    var freq = MouseX.kr(100, 8000, 1);
+    var phase = Phasor.ar(0, freq / SampleRate.ir);
+    var oversample = MouseY.kr(0, 4).round; // Control oversampling with mouse
+    
+    [
+        SingleOscOS.ar(buf, phase, 1, 0, 0),        // No oversampling
+        SingleOscOS.ar(buf, phase, 1, 0, oversample) // Variable oversampling
+    ] * 0.2;
+}.play;
+)
+
+// Wavetable scanning
+(
+// Create 8-cycle wavetable with increasing harmonic content
+var cycles = 8.collect { |i|
+    Wavetable.sineFill(512, (1..(i+1))/(1..(i+1)));
+};
+var buf = Buffer.loadCollection(s, cycles.flatten);
+
+{
+    var freq = 150;
+    var phase = Phasor.ar(0, freq / SampleRate.ir);
+    var scan = SinOsc.kr(0.1).range(0, 1);
+    
+    SingleOscOS.ar(buf, phase, 8, scan, 2) * 0.15; // 8 cycles, 4x oversample
+}.play;
+)
+::
