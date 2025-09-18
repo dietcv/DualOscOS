@@ -1,0 +1,40 @@
+class:: SuperSawOS
+summary:: Roland JP-8000 style SuperSaw oscillator with oversampling
+categories:: UGens>Oscillator
+
+DESCRIPTION::
+SuperSawOS emulates the classic Roland JP-8000 SuperSaw oscillator with optional oversampling.
+
+CLASSMETHODS::
+
+METHOD:: ar
+
+ARGUMENT:: freq
+frequency in Hz.
+
+ARGUMENT:: mix
+mix amount (0.0 to 1.0): 0 = center oscillator only, 1 = full spread with side oscillators.
+
+ARGUMENT:: detune
+detune amount (0.0 to 1.0): controls the spread of the 6 side oscillators.
+
+ARGUMENT:: oversample
+Oversampling factor: 0=1x, 1=2x, 2=4x, 3=8x, 4=16x (default: 0).
+
+returns:: Audio rate UGen.
+
+EXAMPLES::
+
+code::
+(
+{
+	var sig = SuperSawOS.ar(
+		freq: 220,
+		mix: 1.0,
+		detune: 0.75,
+		oversample: 2
+	);
+	sig!2 * 0.1;
+}.play;
+)
+::
